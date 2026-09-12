@@ -3,7 +3,8 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from
 import { Layout, Menu, Dropdown, Avatar, Tag } from 'antd'
 import {
   DashboardOutlined, RocketOutlined, ScheduleOutlined, PictureOutlined,
-  SwapOutlined, AuditOutlined, FileDoneOutlined, GlobalOutlined, UserOutlined
+  SwapOutlined, AuditOutlined, FileDoneOutlined, GlobalOutlined, UserOutlined,
+  BulbOutlined, FireOutlined
 } from '@ant-design/icons'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -14,6 +15,8 @@ import CompareTaskList from './pages/CompareTaskList'
 import SpotReview from './pages/SpotReview'
 import WorkOrderList from './pages/WorkOrderList'
 import MapQuery from './pages/MapQuery'
+import AnalysisCenter from './pages/AnalysisCenter'
+import EnforceHeatmap from './pages/EnforceHeatmap'
 
 const { Sider, Header, Content } = Layout
 
@@ -25,6 +28,8 @@ const menuItems = [
   { key: '/compare', icon: <SwapOutlined />, label: '对比检测' },
   { key: '/spots', icon: <AuditOutlined />, label: '图斑审核' },
   { key: '/orders', icon: <FileDoneOutlined />, label: '工单处置' },
+  { key: '/analysis', icon: <BulbOutlined />, label: '智能分析' },
+  { key: '/heatmap', icon: <FireOutlined />, label: '执法热力图' },
   { key: '/map', icon: <GlobalOutlined />, label: '地图查询' },
 ]
 
@@ -74,6 +79,8 @@ function MainLayout() {
             <Route path="/compare" element={<CompareTaskList />} />
             <Route path="/spots" element={<SpotReview />} />
             <Route path="/orders" element={<WorkOrderList />} />
+            <Route path="/analysis" element={<AnalysisCenter />} />
+            <Route path="/heatmap" element={<EnforceHeatmap />} />
             <Route path="/map" element={<MapQuery />} />
             <Route path="*" element={<Navigate to="/dashboard" replace />} />
           </Routes>

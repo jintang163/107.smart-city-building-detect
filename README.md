@@ -24,6 +24,7 @@
 | 模块 | 目录 | 技术栈 |
 |---|---|---|
 | 业务后端 | `backend/` | Spring Boot 3 + JPA + Hibernate Spatial |
+| 智能分析 | `backend/src/main/java/com/ucm/analysis/` | Drools 规则引擎 + 统计模型（非深度学习） |
 | 空间数据 | `deploy/` | PostGIS 16（GeoServer 可选 profile） |
 | 对象存储 | `deploy/` | MinIO（imagery / evidence 两个 bucket） |
 | 变化检测 | `ai-service/` | FastAPI + OpenCV（ORB 配准 + 差分 + 轮廓提取） |
@@ -106,6 +107,36 @@ cd ai-service/demo && python gen_demo_images.py
 | POST | /orders/{id}/action | 工单动作：ASSIGN/CONFIRM/EXCLUDE/RECTIFY/ARCHIVE |
 | POST | /files/upload | 现场照片上传（evidence bucket） |
 | GET | /map/spots、/map/imagery | GeoJSON 地图数据 |
+| POST | /analysis/recommend | 整改方案推荐（类型+面积+位置 → 自拆/助拆/强拆+预估工时+预测工期） |
+| GET | /analysis/heatmap | 执法热力图（未处置工单网格聚合 GeoJSON + 航线优先级 Top5） |
+| GET | /analysis/predict、/analysis/predict/{orderId} | 工期预测（在办工单/单工单） |
+| GET/POST | /analysis/alerts、/analysis/alerts/scan、/analysis/alerts/{id}/close | 超期预警列表 / 手动扫描 / 关闭 |
+| GET | /analysis/members、/analysis/dispatch/suggest?orderId= | 队员能力画像 / 智能分派建议 |
+| GET/POST | /analysis/cases、/analysis/cases/sync | 历史案例库查询/录入 / 从已归档工单补偿同步 |
+
+## 智能分析模块（策略优化与执法调度）
+
+在工单闭环之上独立的分析模块，**不依赖航拍影像、变化检测模型与 GeoServer**，
+技术栈为 **Drools 规则引擎 + 统计模型**，训练数据源独立于工单表：
+
+- **整改方案推荐**：`rectification.drl` 按 违建类型（屋顶加盖/违法扩建/违法占地/临时搭建）
+  × 面积档 × 热点区域 × 重复违建高发区 决策 自拆/助拆/强拆 与基础工时；
+  热点/高发区由统计模型计算后注入规则引擎（网格未办结工单 ≥3 为热点，历史案例 ≥3 为高发），
+  预估工时 = 规则工时与同类型历史平均工时加权。
+- **执法资源热力图**：未办结工单按 0.01°（约 1km）网格聚合，超期工单权重 ×2，
+  输出 1~5 级热力 GeoJSON 与巡查/无人机航线优先级 Top5。
+- **工期预测**：按「违建类型 × 面积档」分组统计历史平均处理天数，
+  样本不足按 类型 → 全局 → 默认值 分层回退；定时任务（默认每小时，
+  `analysis.alert.scan-interval-ms` 可调）扫描在办工单，超期/临期（剩余 <20%）自动预警，
+  工单办结后预警自动关闭。
+- **队员能力匹配**：从历史案例统计队员的类型经验、效率系数（全局均值/个人均值）、
+  准时率与当前负载，按 40/30/20/-10 权重打分；复杂工单新手降权、简单工单向新手倾斜。
+  派单弹窗内嵌推荐，也可在「智能分析」页查看全员画像。
+
+**训练标签闭环**：工单归档（ARCHIVE）时选择实际整改方式 → 发布 `OrderArchivedEvent`
+→ 事务提交后写入 `violation_case` 案例库（幂等，按来源工单去重）；历史已归档工单可经
+`/analysis/cases/sync` 补偿同步（整改方式未知的按助拆兜底）。首次启动自动生成
+约 48 条演示历史案例与李四/王五/赵六三个队员账号（密码 123456），四个功能开箱即可演示。
 
 ## AI 检测服务接口
 
@@ -145,6 +176,9 @@ CONFIRMED --ARCHIVE--> ARCHIVED
 `imagery` 影像（footprint 为 Polygon）、`compare_task` 对比任务、
 `change_spot` 变化图斑（geom 为 Polygon，含面积/置信度/审核状态）、
 `work_order` 工单、`work_order_log` 流转日志。空间字段均为 EPSG:4326。
+
+智能分析模块新增：`violation_case` 历史案例库（违建类型/面积/位置网格/整改方式/
+处理天数/工时/处置人，训练数据源，独立于工单表）、`analysis_alert` 超期预警。
 
 ## 后续迭代方向
 

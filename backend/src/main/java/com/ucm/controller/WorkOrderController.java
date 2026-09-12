@@ -41,14 +41,15 @@ public class WorkOrderController {
         return ApiResponse.ok(m);
     }
 
-    /** 工单动作：ASSIGN/CONFIRM/EXCLUDE/RECTIFY/ARCHIVE */
+    /** 工单动作：ASSIGN/CONFIRM/EXCLUDE/RECTIFY/ARCHIVE（ARCHIVE 可携带 rectifyMethod 整改方式标签） */
     @PostMapping("/{id}/action")
     public ApiResponse<?> action(@PathVariable Long id, @RequestBody Map<String, Object> body) {
         String action = (String) body.get("action");
         Long assigneeId = body.get("assigneeId") == null ? null : ((Number) body.get("assigneeId")).longValue();
         String comment = body.get("comment") == null ? null : body.get("comment").toString();
         String photos = body.get("photos") == null ? null : body.get("photos").toString();
-        return ApiResponse.ok(toDto(orderService.action(id, action, assigneeId, comment, photos)));
+        String rectifyMethod = body.get("rectifyMethod") == null ? null : body.get("rectifyMethod").toString();
+        return ApiResponse.ok(toDto(orderService.action(id, action, assigneeId, comment, photos, rectifyMethod)));
     }
 
     private Map<String, Object> toDto(WorkOrder o) {

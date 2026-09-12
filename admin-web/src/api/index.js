@@ -42,3 +42,17 @@ export const orderAction = (id, data) => request.post(`/orders/${id}/action`, da
 // 地图
 export const mapSpots = (status) => request.get('/map/spots', { params: { status } })
 export const mapImagery = () => request.get('/map/imagery')
+
+// 智能分析
+export const recommendRectify = (data) => request.post('/analysis/recommend', data)
+export const analysisHeatmap = () => request.get('/analysis/heatmap')
+export const predictOrders = () => request.get('/analysis/predict')
+export const predictOrder = (orderId) => request.get(`/analysis/predict/${orderId}`)
+export const listAlerts = (status) => request.get('/analysis/alerts', { params: { status } })
+export const scanAlerts = () => request.post('/analysis/alerts/scan')
+export const closeAlert = (id) => request.post(`/analysis/alerts/${id}/close`)
+export const memberProfiles = () => request.get('/analysis/members')
+export const dispatchSuggest = (orderId) => request.get('/analysis/dispatch/suggest', { params: { orderId } })
+export const listCases = (type) => request.get('/analysis/cases', { params: { type } })
+export const createCase = (data) => request.post('/analysis/cases', data)
+export const syncCases = () => request.post('/analysis/cases/sync')

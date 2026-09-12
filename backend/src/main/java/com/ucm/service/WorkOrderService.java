@@ -1,5 +1,6 @@
 package com.ucm.service;
 
+import com.ucm.analysis.event.OrderArchivedEvent;
 import com.ucm.common.BizException;
 import com.ucm.common.UserContext;
 import com.ucm.entity.SysUser;
@@ -8,11 +9,11 @@ import com.ucm.entity.WorkOrderLog;
 import com.ucm.repository.SysUserRepository;
 import com.ucm.repository.WorkOrderLogRepository;
 import com.ucm.repository.WorkOrderRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -35,11 +36,14 @@ public class WorkOrderService {
     private final WorkOrderRepository orderRepo;
     private final WorkOrderLogRepository logRepo;
     private final SysUserRepository userRepo;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public WorkOrderService(WorkOrderRepository orderRepo, WorkOrderLogRepository logRepo, SysUserRepository userRepo) {
+    public WorkOrderService(WorkOrderRepository orderRepo, WorkOrderLogRepository logRepo,
+                            SysUserRepository userRepo, ApplicationEventPublisher eventPublisher) {
         this.orderRepo = orderRepo;
         this.logRepo = logRepo;
         this.userRepo = userRepo;
+        this.eventPublisher = eventPublisher;
     }
 
     public List<WorkOrder> list(WorkOrder.Status status, Long assigneeId) {
@@ -56,9 +60,13 @@ public class WorkOrderService {
         return logRepo.findByOrderIdOrderByCreatedAtAsc(orderId);
     }
 
-    /** 执行工单动作（状态机校验 + 留痕） */
+    /**
+     * 执行工单动作（状态机校验 + 留痕）。
+     * ARCHIVE 时可携带 rectifyMethod（实际整改方式），归档后发布事件供智能分析模块同步训练案例。
+     */
     @Transactional
-    public WorkOrder action(Long orderId, String action, Long assigneeId, String comment, String photos) {
+    public WorkOrder action(Long orderId, String action, Long assigneeId, String comment, String photos,
+                            String rectifyMethod) {
         WorkOrder order = detail(orderId);
         Transition t = TRANSITIONS.get(action);
         if (t == null) {
@@ -84,6 +92,10 @@ public class WorkOrderService {
         log.setComment(comment);
         log.setPhotos(photos);
         logRepo.save(log);
+
+        if ("ARCHIVE".equals(action)) {
+            eventPublisher.publishEvent(new OrderArchivedEvent(this, order.getId(), rectifyMethod));
+        }
         return order;
     }
 }

@@ -1,12 +1,17 @@
 import React, { useEffect, useState } from 'react'
-import { Table, Button, Tag, Card, Modal, Select, Input, Timeline, Descriptions, message } from 'antd'
-import { listOrders, orderDetail, orderAction, listUsers } from '../api'
+import { Table, Button, Tag, Card, Modal, Select, Input, Timeline, Descriptions, message, Alert } from 'antd'
+import { listOrders, orderDetail, orderAction, listUsers, dispatchSuggest } from '../api'
 
 const STATUS = {
   PENDING: ['待核查', 'gold'], INSPECTING: ['核查中', 'blue'], CONFIRMED: ['已认定', 'red'],
   EXCLUDED: ['已排除', 'default'], RECTIFYING: ['整改中', 'orange'], ARCHIVED: ['已归档', 'green'],
 }
 const ACTION_LABEL = { ASSIGN: '派单', CONFIRM: '认定违建', EXCLUDE: '排除', RECTIFY: '发起整改', ARCHIVE: '归档' }
+const RECTIFY_METHOD = {
+  SELF_DEMOLITION: '自拆（限期自行拆除）',
+  ASSISTED_DEMOLITION: '助拆（执法队协助拆除）',
+  FORCED_DEMOLITION: '强拆（强制拆除）',
+}
 
 export default function WorkOrderList() {
   const [data, setData] = useState([])
@@ -15,8 +20,10 @@ export default function WorkOrderList() {
   const [detail, setDetail] = useState(null)
   const [assigning, setAssigning] = useState(null)
   const [assigneeId, setAssigneeId] = useState()
+  const [suggests, setSuggests] = useState([])
   const [actionModal, setActionModal] = useState(null) // {order, action}
   const [comment, setComment] = useState('')
+  const [rectifyMethod, setRectifyMethod] = useState('ASSISTED_DEMOLITION')
 
   const load = () => {
     listOrders({ status }).then(setData)
@@ -34,9 +41,19 @@ export default function WorkOrderList() {
 
   const openDetail = async (r) => setDetail(await orderDetail(r.id))
 
+  const openAssign = async (o) => {
+    setAssigneeId(undefined)
+    setAssigning(o)
+    setSuggests([])
+    // 智能分派建议（队员能力匹配模型）
+    try {
+      setSuggests(await dispatchSuggest(o.id))
+    } catch (e) { /* 建议失败不影响手工派单 */ }
+  }
+
   const nextActions = (o) => {
     switch (o.status) {
-      case 'PENDING': return [<Button key="a" type="link" onClick={() => setAssigning(o)}>派单</Button>]
+      case 'PENDING': return [<Button key="a" type="link" onClick={() => openAssign(o)}>派单</Button>]
       case 'INSPECTING': return [
         <Button key="c" type="link" onClick={() => setActionModal({ order: o, action: 'CONFIRM' })}>认定</Button>,
         <Button key="e" type="link" onClick={() => setActionModal({ order: o, action: 'EXCLUDE' })}>排除</Button>,
@@ -88,13 +105,34 @@ export default function WorkOrderList() {
         ]}
       />
 
-      {/* 派单 */}
+      {/* 派单（含智能分派建议） */}
       <Modal
         title={`派单 - ${assigning?.code}`}
         open={!!assigning}
         onCancel={() => setAssigning(null)}
         onOk={() => doAction(assigning.id, 'ASSIGN', { assigneeId })}
+        width={520}
       >
+        {suggests.length > 0 && (
+          <Alert
+            style={{ marginBottom: 12 }}
+            type="info"
+            message={`智能分派建议（工单复杂度 ${suggests[0].complexity} · ${suggests[0].complexityLabel}）`}
+            description={
+              <div>
+                {suggests.slice(0, 3).map((s) => (
+                  <div key={s.userId} style={{ marginTop: 4 }}>
+                    <Button type="link" size="small" onClick={() => setAssigneeId(s.userId)}>
+                      {s.realName}
+                    </Button>
+                    <Tag color={s.recommended ? 'gold' : 'default'}>匹配分 {s.score}</Tag>
+                    <span style={{ color: '#888', fontSize: 12 }}>{s.suggestReason || '综合效率与负载计算'}</span>
+                  </div>
+                ))}
+              </div>
+            }
+          />
+        )}
         <Select
           style={{ width: '100%' }} placeholder="选择处置队员"
           value={assigneeId} onChange={setAssigneeId}
@@ -102,13 +140,24 @@ export default function WorkOrderList() {
         />
       </Modal>
 
-      {/* 其他动作 */}
+      {/* 其他动作（归档时可选择实际整改方式，作为智能分析训练标签） */}
       <Modal
         title={`${ACTION_LABEL[actionModal?.action]} - ${actionModal?.order.code}`}
         open={!!actionModal}
         onCancel={() => setActionModal(null)}
-        onOk={() => doAction(actionModal.order.id, actionModal.action, { comment })}
+        onOk={() => doAction(actionModal.order.id, actionModal.action,
+          actionModal.action === 'ARCHIVE' ? { comment, rectifyMethod } : { comment })}
       >
+        {actionModal?.action === 'ARCHIVE' && (
+          <div style={{ marginBottom: 12 }}>
+            <div style={{ marginBottom: 4 }}>实际整改方式（将作为智能分析训练标签）：</div>
+            <Select
+              style={{ width: '100%' }}
+              value={rectifyMethod} onChange={setRectifyMethod}
+              options={Object.entries(RECTIFY_METHOD).map(([v, t]) => ({ value: v, label: t }))}
+            />
+          </div>
+        )}
         <Input.TextArea rows={3} placeholder="处置意见" value={comment} onChange={(e) => setComment(e.target.value)} />
       </Modal>
 

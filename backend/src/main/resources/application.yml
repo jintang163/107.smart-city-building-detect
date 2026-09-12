@@ -35,3 +35,8 @@ ai:
   detect-url: ${AI_DETECT_URL:http://localhost:8000/detect}
   connect-timeout-ms: 10000
   read-timeout-ms: 300000
+
+# 智能分析模块
+analysis:
+  alert:
+    scan-interval-ms: 3600000   # 超期预警扫描间隔（默认每小时）
