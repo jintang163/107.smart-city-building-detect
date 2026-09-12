@@ -1,0 +1,103 @@
+version: "3.8"
+
+# 智慧城管（违章建筑检测）系统 - 基础设施编排
+# 启动: docker compose up -d
+# 可选 GeoServer: docker compose --profile geoserver up -d
+
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    container_name: ucm-postgis
+    environment:
+      POSTGRES_DB: ucm
+      POSTGRES_USER: ucm
+      POSTGRES_PASSWORD: ucm123456
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgis-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ucm -d ucm"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    container_name: ucm-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # 控制台
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # 初始化 MinIO bucket（一次性任务）
+  minio-init:
+    image: minio/mc:latest
+    container_name: ucm-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin123;
+      mc mb -p local/imagery || true;
+      mc mb -p local/evidence || true;
+      mc anonymous set download local/imagery;
+      mc anonymous set download local/evidence;
+      echo 'buckets ready';
+      "
+
+  # 可选：GeoServer 用于发布 WMS/WFS 图层（首版主链路不依赖，GeoJSON 直接由后端输出）
+  geoserver:
+    image: docker.osgeo/geoserver:2.25.2
+    container_name: ucm-geoserver
+    profiles: ["geoserver"]
+    environment:
+      GEOSERVER_ADMIN_USER: admin
+      GEOSERVER_ADMIN_PASSWORD: geoserver123
+    ports:
+      - "8081:8080"
+    volumes:
+      - geoserver-data:/opt/geoserver_data
+
+  # 可选：AI 检测服务（docker compose --profile app up -d 一键全栈）
+  ai-service:
+    build: ../ai-service
+    container_name: ucm-ai
+    profiles: ["app"]
+    ports:
+      - "8000:8000"
+
+  # 可选：业务后端（需先在 backend/ 执行 mvn package 生成 jar）
+  backend:
+    build: ../backend
+    container_name: ucm-backend
+    profiles: ["app"]
+    environment:
+      DB_HOST: postgis
+      MINIO_ENDPOINT: http://minio:9000
+      AI_DETECT_URL: http://ai-service:8000/detect
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+
+volumes:
+  postgis-data:
+  minio-data:
+  geoserver-data:

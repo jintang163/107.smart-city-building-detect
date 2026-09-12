@@ -1,0 +1,25 @@
+{
+  "pages": [
+    {
+      "path": "pages/login/login",
+      "style": { "navigationBarTitleText": "登录", "navigationStyle": "default" }
+    },
+    {
+      "path": "pages/order/list",
+      "style": {
+        "navigationBarTitleText": "核查工单",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/order/detail",
+      "style": { "navigationBarTitleText": "工单详情" }
+    }
+  ],
+  "globalStyle": {
+    "navigationBarTextStyle": "white",
+    "navigationBarTitleText": "智慧城管",
+    "navigationBarBackgroundColor": "#1677ff",
+    "backgroundColor": "#f5f5f5"
+  }
+}
