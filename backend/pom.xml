@@ -65,6 +65,14 @@
             <artifactId>drools-engine</artifactId>
             <version>8.44.0.Final</version>
         </dependency>
+        <!-- MVEL 约束解析：drools-engine 不传递此模块，缺失时 ConstraintBuilder SPI
+             回退到 DummyConstraintBuilder，KieBuilder.buildAll 抛 UnsupportedOperationException。
+             同时传递引入 org.mvel:mvel2 -->
+        <dependency>
+            <groupId>org.drools</groupId>
+            <artifactId>drools-mvel</artifactId>
+            <version>8.44.0.Final</version>
+        </dependency>
 
         <dependency>
             <groupId>org.springframework.boot</groupId>

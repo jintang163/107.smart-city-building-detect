@@ -7,168 +7,209 @@ import com.ucm.analysis.drools.RectifyFact
 // 决策维度：违建类型 × 面积档 × 热点区域(统计模型注入) × 重复违建高发区
 // 执行顺序：salience 15/10 确定基础整改方式 -> salience 5 区域从严升级
 //           -> salience -10 兜底 -> salience -20 按最终方式设置工时与风险等级
+// 注意：RHS 修改 rectifyMethod 后必须 update($f)，否则后续规则仍按插入时的
+//       null 值求值，升级链与工时规则均不会触发。基础规则统一带
+//       rectifyMethod == null 守卫，保证只决策一次，并避免被后续 update
+//       反复激活与升级规则形成死循环。
 // ============================================================================
 
 // ---------- 超大面积一律强拆 ----------
 rule "超大面积一律强拆"
 salience 15
+no-loop true
 when
-    $f : RectifyFact( areaM2 >= 500 )
+    $f : RectifyFact( areaM2 >= 500, rectifyMethod == null )
 then
     $f.setRectifyMethod("FORCED_DEMOLITION");
     $f.appendReason("违建体量超过500㎡，自拆/助拆难以执行，建议强制拆除");
+    update($f);
 end
 
 // ---------- 屋顶加盖 ----------
 rule "屋顶加盖-大面积强拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 >= 200, areaM2 < 500 )
+    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 >= 200, areaM2 < 500, rectifyMethod == null )
 then
     $f.setRectifyMethod("FORCED_DEMOLITION");
     $f.appendReason("屋顶加盖面积达200㎡以上，高空作业且影响主体结构安全，建议强制拆除");
+    update($f);
 end
 
 rule "屋顶加盖-中面积助拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 >= 80, areaM2 < 200 )
+    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 >= 80, areaM2 < 200, rectifyMethod == null )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("屋顶加盖面积较大，需专业设备辅助，建议执法队协助拆除");
+    update($f);
 end
 
 rule "屋顶加盖-小面积自拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 < 80 )
+    $f : RectifyFact( violationType == "ROOFTOP_ADDITION", areaM2 < 80, rectifyMethod == null )
 then
     $f.setRectifyMethod("SELF_DEMOLITION");
     $f.appendReason("屋顶加盖面积较小，建议责令限期自行拆除");
+    update($f);
 end
 
 // ---------- 违法扩建 ----------
 rule "违法扩建-大面积强拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 >= 300, areaM2 < 500 )
+    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 >= 300, areaM2 < 500, rectifyMethod == null )
 then
     $f.setRectifyMethod("FORCED_DEMOLITION");
     $f.appendReason("违法扩建面积达300㎡以上，当事人自拆意愿低，建议强制拆除");
+    update($f);
 end
 
 rule "违法扩建-中面积助拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 >= 50, areaM2 < 300 )
+    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 >= 50, areaM2 < 300, rectifyMethod == null )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("违法扩建具有一定规模，建议执法队协助拆除");
+    update($f);
 end
 
 rule "违法扩建-小面积自拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 < 50 )
+    $f : RectifyFact( violationType == "ILLEGAL_EXPANSION", areaM2 < 50, rectifyMethod == null )
 then
     $f.setRectifyMethod("SELF_DEMOLITION");
     $f.appendReason("扩建面积较小、拆除难度低，建议责令限期自行拆除");
+    update($f);
 end
 
 // ---------- 违法占地 ----------
 rule "违法占地-强拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "OCCUPY_LAND", areaM2 >= 100, areaM2 < 500 )
+    $f : RectifyFact( violationType == "OCCUPY_LAND", areaM2 >= 100, areaM2 < 500, rectifyMethod == null )
 then
     $f.setRectifyMethod("FORCED_DEMOLITION");
     $f.appendReason("违法占地100㎡以上，需机械进场清除并恢复土地，建议强制拆除");
+    update($f);
 end
 
 rule "违法占地-助拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "OCCUPY_LAND", areaM2 < 100 )
+    $f : RectifyFact( violationType == "OCCUPY_LAND", areaM2 < 100, rectifyMethod == null )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("违法占地需清运恢复地貌，建议执法队协助拆除");
+    update($f);
 end
 
 // ---------- 临时搭建 ----------
 rule "临时搭建-大面积助拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "TEMP_STRUCTURE", areaM2 >= 50, areaM2 < 500 )
+    $f : RectifyFact( violationType == "TEMP_STRUCTURE", areaM2 >= 50, areaM2 < 500, rectifyMethod == null )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("临时搭建面积较大且物料较多，建议执法队协助拆除清运");
+    update($f);
 end
 
 rule "临时搭建-小面积自拆"
 salience 10
+no-loop true
 when
-    $f : RectifyFact( violationType == "TEMP_STRUCTURE", areaM2 < 50 )
+    $f : RectifyFact( violationType == "TEMP_STRUCTURE", areaM2 < 50, rectifyMethod == null )
 then
     $f.setRectifyMethod("SELF_DEMOLITION");
     $f.appendReason("临时搭建结构简单、易于拆除，建议责令限期自行拆除");
+    update($f);
 end
 
 // ---------- 区域从严升级（统计模型注入的区域特征） ----------
+// 升级后 update 触发链式重估：自拆->助拆后可继续命中下一条升级为强拆。
+// 规则改值后自身 LHS 即不成立，不会重复触发。
 rule "热点区域自拆升级助拆"
 salience 5
+no-loop true
 when
     $f : RectifyFact( hotspot == true, rectifyMethod == "SELF_DEMOLITION" )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("位于执法热点区域，自拆升级为助拆以加快处置、防止拖延");
+    update($f);
 end
 
 rule "重复违建高发区助拆升级强拆"
 salience 5
+no-loop true
 when
     $f : RectifyFact( repeatArea == true, rectifyMethod == "ASSISTED_DEMOLITION" )
 then
     $f.setRectifyMethod("FORCED_DEMOLITION");
     $f.appendReason("所在网格重复违建高发，助拆升级为强拆形成执法震慑");
+    update($f);
 end
 
 // ---------- 兜底 ----------
 rule "默认助拆"
 salience -10
+no-loop true
 when
     $f : RectifyFact( rectifyMethod == null )
 then
     $f.setRectifyMethod("ASSISTED_DEMOLITION");
     $f.appendReason("未命中具体规则，按一般违建协助拆除处理");
+    update($f);
 end
 
 // ---------- 工时与风险等级（按最终整改方式统一赋值） ----------
+// update 使最终赋值对引擎可见；no-loop 防止自身更新后重复触发
 rule "工时-自拆"
 salience -20
+no-loop true
 when
     $f : RectifyFact( rectifyMethod == "SELF_DEMOLITION" )
 then
     $f.setBaseHours(4);
     $f.setPerM2Hours(0.05);
     $f.setRiskLevel("低");
+    update($f);
 end
 
 rule "工时-助拆"
 salience -20
+no-loop true
 when
     $f : RectifyFact( rectifyMethod == "ASSISTED_DEMOLITION" )
 then
     $f.setBaseHours(8);
     $f.setPerM2Hours(0.10);
     $f.setRiskLevel("中");
+    update($f);
 end
 
 rule "工时-强拆"
 salience -20
+no-loop true
 when
     $f : RectifyFact( rectifyMethod == "FORCED_DEMOLITION" )
 then
     $f.setBaseHours(16);
     $f.setPerM2Hours(0.15);
     $f.setRiskLevel("高");
+    update($f);
 end
